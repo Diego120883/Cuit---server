@@ -1,0 +1,589 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Consulta CUIT/CUIL</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600;700&family=IBM+Plex+Sans:wght@300;400;500&display=swap');
+
+  :root {
+    --bg: #0d0f14;
+    --surface: #141720;
+    --surface2: #1c2030;
+    --border: #2a3040;
+    --accent: #00e5ff;
+    --green: #00ff88;
+    --red: #ff3d5a;
+    --yellow: #ffd93d;
+    --text: #e8eaf0;
+    --muted: #5a6070;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'IBM Plex Sans', sans-serif;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(0,229,255,0.025) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,229,255,0.025) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .container {
+    position: relative;
+    z-index: 1;
+    max-width: 880px;
+    margin: 0 auto;
+    padding: 40px 24px 80px;
+  }
+
+  .header { margin-bottom: 40px; }
+
+  .header-tag {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    color: var(--accent);
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    margin-bottom: 10px;
+    opacity: 0.7;
+  }
+
+  h1 {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: clamp(26px, 5vw, 44px);
+    font-weight: 700;
+    letter-spacing: -1px;
+    line-height: 1.1;
+  }
+
+  h1 span { color: var(--accent); }
+
+  .header-sub {
+    margin-top: 10px;
+    color: var(--muted);
+    font-size: 13px;
+  }
+
+  .input-panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 28px;
+    margin-bottom: 28px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .input-panel::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, var(--accent), transparent 60%);
+  }
+
+  .input-label {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 2px;
+    color: var(--muted);
+    text-transform: uppercase;
+    margin-bottom: 12px;
+    display: block;
+  }
+
+  .input-row {
+    display: flex;
+    gap: 12px;
+    align-items: stretch;
+  }
+
+  .cuit-input {
+    flex: 1;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    color: var(--text);
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 22px;
+    font-weight: 600;
+    padding: 14px 18px;
+    letter-spacing: 4px;
+    outline: none;
+    transition: border-color 0.2s, box-shadow 0.2s;
+  }
+
+  .cuit-input::placeholder { color: var(--muted); letter-spacing: 2px; }
+  .cuit-input:focus { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(0,229,255,0.08); }
+  .cuit-input.valid { border-color: var(--green); }
+  .cuit-input.invalid { border-color: var(--red); }
+
+  .btn-consultar {
+    background: var(--accent);
+    color: #000;
+    border: none;
+    border-radius: 3px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    padding: 0 28px;
+    cursor: pointer;
+    transition: background 0.2s, transform 0.1s;
+    white-space: nowrap;
+  }
+
+  .btn-consultar:hover { background: #33eaff; }
+  .btn-consultar:active { transform: scale(0.98); }
+  .btn-consultar:disabled { background: var(--border); color: var(--muted); cursor: not-allowed; }
+
+  .validation-msg {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    margin-top: 8px;
+    min-height: 16px;
+  }
+  .validation-msg.ok { color: var(--green); }
+  .validation-msg.err { color: var(--red); }
+
+  .cuit-formatted {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 12px;
+    color: var(--accent);
+    margin-top: 4px;
+    min-height: 18px;
+  }
+
+  .results-grid { display: grid; gap: 16px; }
+
+  .result-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    overflow: hidden;
+    transition: border-color 0.3s;
+  }
+
+  .result-card.loading { animation: pulse-border 1.4s ease infinite; }
+  .result-card.success-clear { border-color: var(--green); }
+  .result-card.success-alert { border-color: var(--red); }
+  .result-card.not-found { border-color: var(--muted); }
+  .result-card.manual { border-color: var(--yellow); }
+
+  @keyframes pulse-border {
+    0%, 100% { border-color: rgba(0,229,255,0.25); }
+    50% { border-color: rgba(0,229,255,0.75); }
+  }
+
+  .card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 20px;
+    background: var(--surface2);
+    border-bottom: 1px solid var(--border);
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+
+  .card-title-group {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .card-icon {
+    width: 34px;
+    height: 34px;
+    border-radius: 3px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 17px;
+    flex-shrink: 0;
+  }
+
+  .icon-repet { background: rgba(255,61,90,0.15); }
+  .icon-uif   { background: rgba(0,229,255,0.12); }
+  .icon-sipro { background: rgba(0,255,136,0.12); }
+  .icon-onu   { background: rgba(255,217,61,0.12); }
+  .icon-pep   { background: rgba(255,107,53,0.15); }
+
+  .card-name {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--text);
+  }
+
+  .card-org {
+    font-size: 11px;
+    color: var(--muted);
+    margin-top: 2px;
+  }
+
+  .status-badge {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    padding: 4px 10px;
+    border-radius: 2px;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+
+  .badge-loading  { background: rgba(0,229,255,0.1); color: var(--accent); }
+  .badge-clear    { background: rgba(0,255,136,0.1); color: var(--green); }
+  .badge-alert    { background: rgba(255,61,90,0.15); color: var(--red); }
+  .badge-notfound { background: rgba(90,96,112,0.15); color: var(--muted); }
+  .badge-manual   { background: rgba(255,217,61,0.1); color: var(--yellow); }
+
+  .card-body { padding: 16px 20px; }
+
+  .desc {
+    font-size: 13px;
+    color: var(--muted);
+    line-height: 1.6;
+    margin-bottom: 14px;
+  }
+
+  .result-detail {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 12px;
+    line-height: 1.9;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    padding: 12px 16px;
+    margin-bottom: 14px;
+  }
+
+  .field { display: flex; gap: 8px; flex-wrap: wrap; }
+  .field-key { color: var(--muted); min-width: 150px; }
+  .field-val { font-weight: 600; }
+  .field-val.alert { color: var(--red); }
+  .field-val.clear { color: var(--green); }
+  .field-val.info  { color: var(--accent); }
+  .field-val.warn  { color: var(--yellow); }
+
+  .spinner {
+    display: inline-block;
+    width: 12px; height: 12px;
+    border: 2px solid rgba(0,229,255,0.2);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .btn-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    color: var(--accent);
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    padding: 7px 14px;
+    text-decoration: none;
+    transition: border-color 0.2s, background 0.2s;
+  }
+  .btn-link:hover { border-color: var(--accent); background: rgba(0,229,255,0.05); }
+
+  .note-box {
+    background: rgba(255,217,61,0.05);
+    border: 1px solid rgba(255,217,61,0.25);
+    border-radius: 3px;
+    padding: 10px 14px;
+    font-size: 12px;
+    color: var(--yellow);
+    margin-bottom: 14px;
+    line-height: 1.5;
+  }
+  .note-box.danger {
+    background: rgba(255,61,90,0.05);
+    border-color: rgba(255,61,90,0.3);
+    color: var(--red);
+  }
+
+  .idle-state {
+    text-align: center;
+    padding: 48px 20px;
+    color: var(--muted);
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 12px;
+    letter-spacing: 1px;
+  }
+  .idle-state .big { font-size: 40px; margin-bottom: 14px; opacity: 0.2; }
+
+  .footer {
+    margin-top: 50px;
+    padding-top: 18px;
+    border-top: 1px solid var(--border);
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    color: var(--muted);
+    letter-spacing: 1px;
+    display: flex;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  @media (max-width: 560px) {
+    .input-row { flex-direction: column; }
+    .btn-consultar { padding: 14px; }
+    .cuit-input { font-size: 18px; letter-spacing: 2px; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <div class="header">
+    <div class="header-tag">// Registros Oficiales · Argentina</div>
+    <h1>Consulta<br><span>CUIT / CUIL</span></h1>
+    <div class="header-sub">REPET · UIF · SIPRO · ONU · PEP — Verificación automática en registros del Estado</div>
+  </div>
+
+  <div class="input-panel">
+    <label class="input-label" for="cuitInput">Ingresá el CUIT o CUIL</label>
+    <div class="input-row">
+      <input
+        type="text"
+        id="cuitInput"
+        class="cuit-input"
+        placeholder="XX-XXXXXXXX-X"
+        maxlength="13"
+        inputmode="numeric"
+        autocomplete="off"
+      />
+      <button class="btn-consultar" id="btnConsultar" disabled>Consultar</button>
+    </div>
+    <div class="cuit-formatted" id="cuitFormatted"></div>
+    <div class="validation-msg" id="validationMsg"></div>
+  </div>
+
+  <div class="results-grid" id="resultsGrid">
+    <div class="idle-state">
+      <div class="big">🔍</div>
+      Ingresá un CUIT o CUIL para comenzar
+    </div>
+  </div>
+
+  <div class="footer">
+    <span>REPET · Min. Justicia / UIF</span>
+    <span>SIPRO · ONC</span>
+    <span>PEP · UIF</span>
+    <span>ONU · Consejo de Seguridad</span>
+  </div>
+
+</div>
+<script>
+const API = "https://web-production-7a27b.up.railway.app";
+
+// ── CUIT utils ────────────────────────────────────────────────────────────────
+function soloDigitos(v) { return v.replace(/\D/g, ''); }
+
+function formatCUIT(d) {
+  if (d.length <= 2) return d;
+  if (d.length <= 10) return d.slice(0,2) + '-' + d.slice(2);
+  return d.slice(0,2) + '-' + d.slice(2,10) + '-' + d.slice(10,11);
+}
+
+function validarCUIT(d) {
+  if (d.length !== 11) return false;
+  const pref = ['20','23','24','25','26','27','30','33','34'];
+  if (!pref.includes(d.slice(0,2))) return false;
+  const pesos = [5,4,3,2,7,6,5,4,3,2];
+  let suma = 0;
+  for (let i = 0; i < 10; i++) suma += parseInt(d[i]) * pesos[i];
+  const resto = suma % 11;
+  const ver = resto === 0 ? 0 : resto === 1 ? 9 : 11 - resto;
+  return ver === parseInt(d[10]);
+}
+
+// ── Input ─────────────────────────────────────────────────────────────────────
+const inputEl = document.getElementById('cuitInput');
+const btnEl   = document.getElementById('btnConsultar');
+const msgEl   = document.getElementById('validationMsg');
+const fmtEl   = document.getElementById('cuitFormatted');
+
+inputEl.addEventListener('input', () => {
+  let d = soloDigitos(inputEl.value);
+  if (d.length > 11) d = d.slice(0,11);
+  inputEl.value = formatCUIT(d);
+  inputEl.classList.remove('valid','invalid');
+  msgEl.className = 'validation-msg';
+  fmtEl.textContent = '';
+  btnEl.disabled = true;
+  if (!d.length) return;
+  if (d.length < 11) { msgEl.textContent = `${d.length}/11 dígitos`; return; }
+  if (validarCUIT(d)) {
+    inputEl.classList.add('valid');
+    msgEl.className = 'validation-msg ok';
+    msgEl.textContent = '✓ CUIT/CUIL válido';
+    fmtEl.textContent = '→ ' + formatCUIT(d);
+    btnEl.disabled = false;
+  } else {
+    inputEl.classList.add('invalid');
+    msgEl.className = 'validation-msg err';
+    msgEl.textContent = '✗ Dígito verificador incorrecto';
+  }
+});
+
+inputEl.addEventListener('keydown', e => { if (e.key === 'Enter' && !btnEl.disabled) iniciarConsulta(); });
+btnEl.addEventListener('click', iniciarConsulta);
+
+// ── Consulta ──────────────────────────────────────────────────────────────────
+function iniciarConsulta() {
+  const d = soloDigitos(inputEl.value);
+  if (!validarCUIT(d)) return;
+
+  const grid = document.getElementById('resultsGrid');
+  grid.innerHTML = '';
+
+  const fuentes = [
+    { id:'repet', icon:'🚫', iconClass:'icon-repet', nombre:'REPET',          org:'Registro de Terroristas · UIF / Min. Justicia',      endpoint:`/repet/${d}` },
+    { id:'uif',   icon:'🏦', iconClass:'icon-uif',   nombre:'Sujeto Obligado', org:'Obligados a reportar ante la UIF',                   endpoint:`/uif/${d}`   },
+    { id:'sipro', icon:'🏛️', iconClass:'icon-sipro', nombre:'SIPRO',           org:'Proveedores del Estado · ONC',                       endpoint:`/sipro/${d}` },
+    { id:'onu',   icon:'🌐', iconClass:'icon-onu',   nombre:'Lista ONU',        org:'Sanciones · Consejo de Seguridad Naciones Unidas',   endpoint:`/onu/${d}`   },
+    { id:'pep',   icon:'👤', iconClass:'icon-pep',   nombre:'PEP',              org:'Personas Expuestas Políticamente · UIF',             endpoint:`/pep/${d}`   },
+  ];
+
+  fuentes.forEach(f => {
+    const card = crearCardLoading(f);
+    grid.appendChild(card);
+    fetchConsulta(f.endpoint, card, f.nombre);
+  });
+}
+
+async function fetchConsulta(endpoint, card, nombre) {
+  try {
+    const res = await fetch(API + endpoint, { signal: AbortSignal.timeout(15000) });
+    if (!res.ok) throw new Error('http-error');
+    const data = await res.json();
+    renderResultado(card, data, nombre);
+  } catch(e) {
+    renderError(card, nombre);
+  }
+}
+
+// ── Render resultados ─────────────────────────────────────────────────────────
+function renderResultado(card, data, nombre) {
+  switch(data.estado) {
+
+    case 'libre':
+    case 'no_encontrado':
+      card.className = data.estado === 'libre' ? 'result-card success-clear' : 'result-card not-found';
+      setBadge(card, data.estado === 'libre' ? 'badge-clear' : 'badge-notfound',
+               data.estado === 'libre' ? 'Sin registros' : 'No encontrado');
+      card.querySelector('.card-body').innerHTML = `
+        <div class="result-detail">
+          <div class="field"><span class="field-key">Estado:</span>
+          <span class="field-val ${data.estado === 'libre' ? 'clear' : ''}">${data.mensaje}</span></div>
+        </div>
+        ${data.link ? `<a href="${data.link}" target="_blank" class="btn-link">↗ Ver en sitio oficial</a>` : ''}
+      `;
+      break;
+
+    case 'alerta':
+    case 'encontrado':
+      card.className = 'result-card success-alert';
+      setBadge(card, 'badge-alert', '⚠ Alerta');
+      let filas = '';
+      if (data.registros && data.registros.length) {
+        data.registros.forEach(r => {
+          Object.entries(r).forEach(([k,v]) => {
+            filas += `<div class="field"><span class="field-key">${capitalizar(k)}:</span><span class="field-val alert">${v}</span></div>`;
+          });
+          filas += `<hr style="border:none;border-top:1px solid #2a3040;margin:6px 0">`;
+        });
+      }
+      card.querySelector('.card-body').innerHTML = `
+        <div class="note-box danger">⚠ ${data.mensaje}</div>
+        ${filas ? `<div class="result-detail">${filas}</div>` : ''}
+        ${data.link ? `<a href="${data.link}" target="_blank" class="btn-link">↗ Ver en sitio oficial</a>` : ''}
+      `;
+      break;
+
+    case 'manual':
+      card.className = 'result-card manual';
+      setBadge(card, 'badge-manual', 'Consulta manual');
+      card.querySelector('.card-body').innerHTML = `
+        <div class="note-box">${data.mensaje}</div>
+        ${data.link ? `<a href="${data.link}" target="_blank" class="btn-link">↗ Consultar ${nombre}</a>` : ''}
+      `;
+      break;
+
+    default:
+      renderError(card, nombre);
+  }
+}
+
+function renderError(card, nombre) {
+  card.className = 'result-card manual';
+  setBadge(card, 'badge-manual', 'Sin conexión');
+  card.querySelector('.card-body').innerHTML = `
+    <p class="desc">No se pudo conectar con el registro de ${nombre}. Verificá tu conexión e intentá de nuevo.</p>
+  `;
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function crearCardLoading(f) {
+  const card = document.createElement('div');
+  card.className = 'result-card loading';
+  card.id = 'card-' + f.id;
+  card.innerHTML = `
+    <div class="card-header">
+      <div class="card-title-group">
+        <div class="card-icon ${f.iconClass}">${f.icon}</div>
+        <div>
+          <div class="card-name">${f.nombre}</div>
+          <div class="card-org">${f.org}</div>
+        </div>
+      </div>
+      <span class="status-badge badge-loading"><span class="spinner"></span>&nbsp;Consultando</span>
+    </div>
+    <div class="card-body">
+      <p class="desc">Conectando con el registro oficial...</p>
+    </div>
+  `;
+  return card;
+}
+
+function setBadge(card, cls, texto) {
+  const badge = card.querySelector('.status-badge');
+  badge.className = 'status-badge ' + cls;
+  badge.textContent = texto;
+}
+
+function capitalizar(s) {
+  return s.charAt(0).toUpperCase() + s.slice(1).replace(/_/g,' ');
+}
+</script>
+</body>
+</html>
